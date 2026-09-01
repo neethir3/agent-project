@@ -157,6 +157,44 @@ def create_kb(name):
     return None, None
 
 
+def patch_dataset(dataset_id):
+    """配置知识库分段规则：按标题切分 + 混合检索 + 重排序。"""
+    patch = {
+        "indexing_technique": "high_quality",
+        "process_rule": {
+            "mode": "custom",
+            "rules": {
+                "pre_processing_rules": [
+                    {"id": "remove_extra_spaces", "enabled": False},
+                    {"id": "remove_urls_emails", "enabled": False},
+                ],
+                "segmentation": {
+                    "separator": "\n#",       # 按 Markdown 标题分段
+                    "max_tokens": 1000,        # 每段最多 1000 tokens
+                    "chunk_overlap": 50,       # 段间重叠 50 tokens
+                },
+            },
+        },
+        "retrieval_model": {
+            "search_method": "hybrid_search",
+            "reranking_enable": True,
+            "reranking_mode": "reranking_model",
+            "reranking_model": {
+                "reranking_provider_name": "langgenius/xinference/xinference",
+                "reranking_model_name": "bge-reranker-v2-m3",
+            },
+            "top_k": 8,
+            "score_threshold_enabled": True,
+            "score_threshold": 0.3,
+        },
+    }
+    st, _ = dify_req("/v1/datasets/%s" % dataset_id, "PATCH", patch)
+    if st == 200:
+        print("  分段规则已设置: 按标题(\\n#)切分, max_tokens=1000, overlap=50")
+    else:
+        print("  分段设置返回 %s，可能需要 UI 手动确认" % st)
+
+
 def upload_doc(dataset_id, name, text):
     """上传文档到知识库。"""
     body = {
@@ -237,6 +275,7 @@ def build_kb(repo_path, kb_name, branch="vnext-b", dataset_id=None, skip=None, d
         if not dataset_id:
             return {"error": "创建知识库失败"}
         print("  新建知识库: %s (id=%s)" % (actual_name, dataset_id))
+        patch_dataset(dataset_id)  # 设置分段规则
     else:
         print("  使用已有知识库: %s" % dataset_id)
 
