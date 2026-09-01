@@ -55,6 +55,26 @@ AZURE_DEVOPS_PAT = os.environ.get("AZURE_DEVOPS_PAT", "")
 DIFY_API_KEY = os.environ.get("DIFY_API_KEY", "")
 DIFY_BASE_URL = os.environ.get("DIFY_BASE_URL", "https://dify-test.uat.autobestdevops.com")
 
+# 站点 → test 环境 URL 映射（从文件路径自动匹配站点，生成真实测试 URL）
+SITE_URL_MAP = {
+    "bpd": "https://bpd.test.autobestdevops.com",
+    "apw": "https://apw.test.autobestdevops.com",
+    "gpg": "https://gpg.test.autobestdevops.com",
+    "npa": "https://npa.test.autobestdevops.com",
+    "npp": "https://npp.test.autobestdevops.com",
+    "wpi": "https://wpi.test.autobestdevops.com",
+    "ape": "https://ape.test.autobestdevops.com",
+    "bpe": "https://bpe.test.autobestdevops.com",
+    "npe": "https://npe.test.autobestdevops.com",
+    "wpe": "https://wpe.test.autobestdevops.com",
+}
+# 可通过环境变量覆盖: SITE_URL_MAP=bpd:https://...,apw:https://...
+if os.environ.get("SITE_URL_MAP"):
+    for pair in os.environ["SITE_URL_MAP"].split(","):
+        if ":" in pair:
+            k, v = pair.split(":", 1)
+            SITE_URL_MAP[k.strip()] = v.strip()
+
 # ─── 工具定义 ──────────────────────────────────────────────────────────────────
 
 TOOLS = [
@@ -235,7 +255,7 @@ def _summarize_diff(diff_text: str) -> str:
 
 
 def _generate_test_suggestions(changed_files: list) -> list:
-    """根据变更文件生成测试建议。"""
+    """根据变更文件生成测试建议，自动解析站点 URL。"""
     tests = []
     tid = 0
 
@@ -246,62 +266,82 @@ def _generate_test_suggestions(changed_files: list) -> list:
         import re
         sites = re.findall(r'\b(apw|bpd|gpg|npa|npp|wpi|ape|bpe|npe|wpe)\b', path, re.IGNORECASE)
         sites = list(set(s.lower() for s in sites))
+        if not sites:
+            sites = ["bpd"]  # 默认站点
+
+        # 生成实际测试 URL（每个站点一条）
+        def _make_test(desc, url_suffix, check_type, expected):
+            nonlocal tid
+            tid += 1
+            urls = [SITE_URL_MAP.get(s, "https://%s.test.autobestdevops.com" % s) + url_suffix
+                    for s in sites]
+            return {
+                "id": tid,
+                "description": desc,
+                "test_urls": urls,  # 解析后的真实 URL 列表
+                "check_type": check_type,
+                "expected": expected,
+                "sites": sites,
+            }
 
         # 根据文件路径推断测试 URL 模式
         if "privacy-policy" in path.lower() or "privacy policy" in path.lower():
-            tid += 1
-            tests.append({
-                "id": tid,
-                "description": "验证 Privacy Policy 页面更新",
-                "test_url": "{site}/privacy-policy",
-                "check_type": "content",
-                "expected": "Last Updated",
-                "sites": sites or ["bpd"],
-            })
+            tests.append(_make_test(
+                "验证 Privacy Policy 页面更新",
+                "/privacy-policy", "content", "Last Updated"
+            ))
         elif "terms" in path.lower():
-            tid += 1
-            tests.append({
-                "id": tid,
-                "description": "验证 Terms of Use 页面更新",
-                "test_url": "{site}/terms-of-use",
-                "check_type": "content",
-                "expected": "Terms",
-                "sites": sites or ["bpd"],
-            })
+            tests.append(_make_test(
+                "验证 Terms of Use 页面更新",
+                "/terms-of-use", "content", "Terms"
+            ))
+        elif "sales" in path.lower() and "policy" in path.lower():
+            tests.append(_make_test(
+                "验证 Sales Policy 页面更新",
+                "/sales-policy", "screenshot", ""
+            ))
         elif "footer" in path.lower():
-            tid += 1
-            tests.append({
-                "id": tid,
-                "description": "验证 Footer 更新",
-                "test_url": "{site}",
-                "check_type": "element",
-                "selector": "footer",
-                "sites": sites or ["bpd"],
-            })
+            tests.append(_make_test(
+                "验证 Footer 更新",
+                "", "element", "footer"
+            ))
         else:
-            tid += 1
-            tests.append({
-                "id": tid,
-                "description": "验证变更文件 %s 对应页面" % path.split("/")[-1].replace(".md", ""),
-                "test_url": "{site}",
-                "check_type": "screenshot",
-                "expected": "",
-                "sites": sites or ["bpd"],
-            })
+            tests.append(_make_test(
+                "验证变更文件 %s 对应页面" % path.split("/")[-1].replace(".md", ""),
+                "", "screenshot", ""
+            ))
 
     return tests
 
 
 def _run_test_handler(test_cases: list) -> dict:
-    """工具: 执行浏览器自动化测试。"""
+    """工具: 执行浏览器自动化测试，支持 test_urls 列表自动展开。"""
     try:
         from test_runner import TestRunner
+
+        # 展开 test_urls（如果有）为多个独立测试用例
+        expanded = []
+        for tc in test_cases:
+            if "test_urls" in tc and tc["test_urls"]:
+                for url in tc["test_urls"]:
+                    expanded.append({
+                        "id": tc.get("id", 0),
+                        "description": "%s [%s]" % (tc.get("description", ""), url),
+                        "test_url": url,
+                        "check_type": tc.get("check_type", "content"),
+                        "expected": tc.get("expected", ""),
+                        "selector": tc.get("selector", ""),
+                    })
+            elif "test_url" in tc and tc["test_url"]:
+                expanded.append(tc)
+            else:
+                return {"error": "测试用例缺少 test_url 或 test_urls"}
 
         async def _run():
             runner = TestRunner(headless=True)
             await runner.start()
             try:
-                results = await runner.run_batch(test_cases)
+                results = await runner.run_batch(expanded)
                 return results
             finally:
                 await runner.stop()
