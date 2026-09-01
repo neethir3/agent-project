@@ -337,16 +337,12 @@ def _run_test_handler(test_cases: list) -> dict:
             else:
                 return {"error": "测试用例缺少 test_url 或 test_urls"}
 
-        async def _run():
-            runner = TestRunner(headless=True)
-            await runner.start()
-            try:
-                results = await runner.run_batch(expanded)
-                return results
-            finally:
-                await runner.stop()
-
-        results = asyncio.run(_run())
+        runner = TestRunner(headless=True)
+        runner.start()
+        try:
+            results = runner.run_batch(expanded)
+        finally:
+            runner.stop()
 
         passed = sum(1 for r in results if r["status"] == "pass")
         failed = sum(1 for r in results if r["status"] == "fail")

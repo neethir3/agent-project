@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
-"""Playwright 浏览器自动化测试引擎 —— 部署在 Linux 服务器上。
+"""Playwright 浏览器自动化测试引擎 —— 同步 API，部署在 Linux 服务器上。
 
 用法（命令行）:
   python test_runner.py --url="https://bpd.test.autobestdevops.com/privacy-policy" \
-      --check="content" --expected="Last Updated: Sept 01, 2026" \
-      --screenshot-dir=./screenshots
+      --check="content" --expected="Last Updated: Sept 01, 2026"
 
 用法（Python 模块）:
   from test_runner import TestRunner
   runner = TestRunner(headless=True)
-  result = await runner.run_test_case({
+  runner.start()
+  result = runner.run_test_case({
       "id": 1,
       "test_url": "https://bpd.test.autobestdevops.com/privacy-policy",
       "check_type": "content",
       "expected": "Last Updated: Sept 01, 2026",
   })
-  print(result["status"], result["screenshot"])  # screenshot 是 base64
+  runner.stop()
 """
-import sys, os, base64, json, asyncio
+import sys, os, base64, json, time
 
 try:
-    from playwright.async_api import async_playwright
+    from playwright.sync_api import sync_playwright
 except ImportError:
     print("请先安装 Playwright: pip install playwright && playwright install chromium")
     raise
@@ -29,7 +29,7 @@ except ImportError:
 # ─── 测试引擎 ──────────────────────────────────────────────────────────────────
 
 class TestRunner:
-    """Playwright 浏览器自动化测试引擎。
+    """Playwright 浏览器自动化测试引擎（同步 API）。
 
     check_type 支持:
       - "content"  : 页面文本包含 expected
@@ -45,10 +45,10 @@ class TestRunner:
         self._playwright = None
         self._browser = None
 
-    async def start(self):
+    def start(self):
         """启动浏览器。"""
-        self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
+        self._playwright = sync_playwright().start()
+        self._browser = self._playwright.chromium.launch(
             headless=self.headless,
             args=[
                 "--no-sandbox",
@@ -57,14 +57,14 @@ class TestRunner:
             ],
         )
 
-    async def stop(self):
+    def stop(self):
         """关闭浏览器。"""
         if self._browser:
-            await self._browser.close()
+            self._browser.close()
         if self._playwright:
-            await self._playwright.stop()
+            self._playwright.stop()
 
-    async def run_test_case(self, test_case: dict) -> dict:
+    def run_test_case(self, test_case: dict) -> dict:
         """执行单个测试用例，返回结果字典。
 
         test_case 格式:
@@ -111,20 +111,20 @@ class TestRunner:
         context = None
         page = None
         try:
-            context = await self._browser.new_context(
+            context = self._browser.new_context(
                 viewport=self.viewport,
                 ignore_https_errors=True,
             )
-            page = await context.new_page()
-            await page.set_default_timeout(self.timeout)
+            page = context.new_page()
+            page.set_default_timeout(self.timeout)
 
             # 打开页面
-            await page.goto(test_url, wait_until=wait_until)
+            page.goto(test_url, wait_until=wait_until)
             # 额外等 2 秒，确保 JS 渲染完毕
-            await asyncio.sleep(2)
+            time.sleep(2)
 
             # 截图
-            screenshot_bytes = await page.screenshot(full_page=True)
+            screenshot_bytes = page.screenshot(full_page=True)
             result["screenshot"] = base64.b64encode(screenshot_bytes).decode("utf-8")
 
             # 根据 check_type 执行验证
@@ -134,7 +134,7 @@ class TestRunner:
                 return result
 
             elif check_type == "content":
-                body_text = await page.inner_text("body")
+                body_text = page.inner_text("body")
                 result["actual"] = body_text[:500]
                 if expected and expected in body_text:
                     result["status"] = "pass"
@@ -148,8 +148,8 @@ class TestRunner:
                     result["error"] = "element 模式需要 selector 参数"
                     return result
                 try:
-                    el = await page.wait_for_selector(selector, timeout=self.timeout)
-                    el_text = await el.inner_text() if el else ""
+                    el = page.wait_for_selector(selector, timeout=self.timeout)
+                    el_text = el.inner_text() if el else ""
                     result["actual"] = el_text[:500]
                     if expected:
                         if expected in el_text:
@@ -187,40 +187,24 @@ class TestRunner:
 
         finally:
             if page:
-                await page.close()
+                page.close()
             if context:
-                await context.close()
+                context.close()
 
         return result
 
-    async def run_batch(self, test_cases: list) -> list:
+    def run_batch(self, test_cases: list) -> list:
         """批量执行测试用例，返回结果列表。"""
         results = []
         for tc in test_cases:
-            r = await self.run_test_case(tc)
+            r = self.run_test_case(tc)
             results.append(r)
         return results
-
-    async def screenshot_only(self, url: str) -> str:
-        """仅截图指定 URL，返回 base64 图片。"""
-        context = await self._browser.new_context(
-            viewport=self.viewport,
-            ignore_https_errors=True,
-        )
-        page = await context.new_page()
-        try:
-            await page.goto(url, wait_until="networkidle")
-            await asyncio.sleep(2)
-            screenshot_bytes = await page.screenshot(full_page=True)
-            return base64.b64encode(screenshot_bytes).decode("utf-8")
-        finally:
-            await page.close()
-            await context.close()
 
 
 # ─── 命令行入口 ────────────────────────────────────────────────────────────────
 
-async def _main():
+def main():
     import argparse
     parser = argparse.ArgumentParser(description="Playwright 测试引擎")
     parser.add_argument("--url", required=True, help="测试页面 URL")
@@ -234,7 +218,7 @@ async def _main():
     args = parser.parse_args()
 
     runner = TestRunner(headless=not args.headed)
-    await runner.start()
+    runner.start()
 
     try:
         tc = {
@@ -244,7 +228,7 @@ async def _main():
             "expected": args.expected,
             "selector": args.selector,
         }
-        result = await runner.run_test_case(tc)
+        result = runner.run_test_case(tc)
 
         print(json.dumps({"status": result["status"], "detail": result["detail"]},
                          ensure_ascii=False, indent=2))
@@ -258,8 +242,8 @@ async def _main():
                 f.write(base64.b64decode(result["screenshot"]))
             print("截图: %s" % filepath)
     finally:
-        await runner.stop()
+        runner.stop()
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    main()

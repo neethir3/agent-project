@@ -139,7 +139,7 @@ async def get_test_runner():
     if _test_runner is None:
         from test_runner import TestRunner
         _test_runner = TestRunner(headless=True)
-        await _test_runner.start()
+        _test_runner.start()
     return _test_runner
 
 
@@ -212,12 +212,13 @@ async def screenshot(url: str):
     try:
         from test_runner import TestRunner
         runner = TestRunner(headless=True)
-        await runner.start()
+        runner.start()
         try:
-            img = await runner.screenshot_only(url)
-            return {"url": url, "screenshot": img}
+            tc = {"id": "screenshot", "test_url": url, "check_type": "screenshot"}
+            result = runner.run_test_case(tc)
+            return {"url": url, "screenshot": result.get("screenshot", ""), "status": result.get("status", "")}
         finally:
-            await runner.stop()
+            runner.stop()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
