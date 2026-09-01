@@ -56,42 +56,42 @@ DIFY_API_KEY = os.environ.get("DIFY_API_KEY", "")
 DIFY_BASE_URL = os.environ.get("DIFY_BASE_URL", "https://dify-test.uat.autobestdevops.com")
 
 # 站点 → test 环境 URL 映射（从文件路径自动匹配站点，生成真实测试 URL）
-# test 环境统一格式: https://{site}.test.autobestdevops.com
+# test 环境统一格式: https://{site}.uat.autobestdevops.com
 # 生产环境域名参考（仅文档用，Agent 不碰生产）
 
 def _site_test_url(site: str) -> str:
     """根据站点代码获取 test 环境 URL。"""
     s = site.lower()
-    return SITE_DOMAINS.get(s, "https://%s.test.autobestdevops.com" % s)
+    return SITE_DOMAINS.get(s, "https://%s.uat.autobestdevops.com" % s)
 
 # test 环境域名映射（Agent 测试用，自动匹配站点代码 → 真实 test URL）
 SITE_DOMAINS = {
     # 加州网站
-    "apw": "https://apw.test.autobestdevops.com",
-    "bpd": "https://bpd.test.autobestdevops.com",
-    "fpg": "https://fpg.test.autobestdevops.com",
-    "gpg": "https://gpg.test.autobestdevops.com",
-    "hpd": "https://hpd.test.autobestdevops.com",
-    "hpn": "https://hpn.test.autobestdevops.com",
-    "ipd": "https://ipd.test.autobestdevops.com",
-    "kpn": "https://kpn.test.autobestdevops.com",
-    "lpn": "https://lpn.test.autobestdevops.com",
-    "mpg": "https://mpg.test.autobestdevops.com",
-    "npd": "https://npd.test.autobestdevops.com",
-    "spd": "https://spd.test.autobestdevops.com",
-    "tpd": "https://tpd.test.autobestdevops.com",
+    "apw": "https://apw.uat.autobestdevops.com",
+    "bpd": "https://bpd.uat.autobestdevops.com",
+    "fpg": "https://fpg.uat.autobestdevops.com",
+    "gpg": "https://gpg.uat.autobestdevops.com",
+    "hpd": "https://hpd.uat.autobestdevops.com",
+    "hpn": "https://hpn.uat.autobestdevops.com",
+    "ipd": "https://ipd.uat.autobestdevops.com",
+    "kpn": "https://kpn.uat.autobestdevops.com",
+    "lpn": "https://lpn.uat.autobestdevops.com",
+    "mpg": "https://mpg.uat.autobestdevops.com",
+    "npd": "https://npd.uat.autobestdevops.com",
+    "spd": "https://spd.uat.autobestdevops.com",
+    "tpd": "https://tpd.uat.autobestdevops.com",
     # 新网站
-    "adpg": "https://adpg.test.autobestdevops.com",
-    "mbpg": "https://mbpg.test.autobestdevops.com",
-    "mzpn": "https://mzpn.test.autobestdevops.com",
-    "mtpg": "https://mtpg.test.autobestdevops.com",
-    "vpg": "https://vpg.test.autobestdevops.com",
-    "vwpg": "https://vwpg.test.autobestdevops.com",
+    "adpg": "https://adpg.uat.autobestdevops.com",
+    "mbpg": "https://mbpg.uat.autobestdevops.com",
+    "mzpn": "https://mzpn.uat.autobestdevops.com",
+    "mtpg": "https://mtpg.uat.autobestdevops.com",
+    "vpg": "https://vpg.uat.autobestdevops.com",
+    "vwpg": "https://vwpg.uat.autobestdevops.com",
     # 第二网站
-    "cpd": "https://cpd.test.autobestdevops.com",
-    "fpd": "https://fpd.test.autobestdevops.com",
-    "jpd": "https://jpd.test.autobestdevops.com",
-    "tpn": "https://tpn.test.autobestdevops.com",
+    "cpd": "https://cpd.uat.autobestdevops.com",
+    "fpd": "https://fpd.uat.autobestdevops.com",
+    "jpd": "https://jpd.uat.autobestdevops.com",
+    "tpn": "https://tpn.uat.autobestdevops.com",
 }
 
 # ─── 工具定义 ──────────────────────────────────────────────────────────────────
