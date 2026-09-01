@@ -55,6 +55,14 @@ AZURE_DEVOPS_PAT = os.environ.get("AZURE_DEVOPS_PAT", "")
 DIFY_API_KEY = os.environ.get("DIFY_API_KEY", "")
 DIFY_BASE_URL = os.environ.get("DIFY_BASE_URL", "https://dify-test.uat.autobestdevops.com")
 
+# Dify 知识库 ID（检索用）
+DIFY_DATASET_REQUIREMENTS = os.environ.get("DIFY_DATASET_REQUIREMENTS",
+    "6316f2b8-f840-4fea-959f-d67b99a75b37")  # 全页面需求_20260828_v6 (164 docs)
+DIFY_DATASET_CHANGES = os.environ.get("DIFY_DATASET_CHANGES",
+    "5c22985e-90da-4545-bc91-18b1016167f4")  # 需求变更_20260829 (2 docs)
+DIFY_DATASET_TESTS = os.environ.get("DIFY_DATASET_TESTS",
+    "52beeba0-3c79-4e31-afc2-1e67f8c6a200")  # 测试方案_20260828_v3 (42 docs)
+
 # 站点 → test 环境 URL 映射（从文件路径自动匹配站点，生成真实测试 URL）
 # test 环境统一格式: https://{site}.uat.autobestdevops.com
 # 生产环境域名参考（仅文档用，Agent 不碰生产）
@@ -159,6 +167,35 @@ TOOLS = [
                     },
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "build_kb",
+            "description": "从 Azure DevOps Git 仓库读取需求文档，自动创建/更新 Dify 知识库。适用场景：初次建库、增量更新知识库。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo_path": {
+                        "type": "string",
+                        "description": "Azure DevOps 仓库中的目录路径，如 /Frontend_正厂整合需求/Policy",
+                    },
+                    "kb_name": {
+                        "type": "string",
+                        "description": "知识库名称，如 Policy需求",
+                    },
+                    "branch": {
+                        "type": "string",
+                        "description": "分支名，默认 vnext-b",
+                    },
+                    "dataset_id": {
+                        "type": "string",
+                        "description": "追加到已有知识库的 ID（不填则新建）",
+                    },
+                },
+                "required": ["repo_path", "kb_name"],
             },
         },
     },
@@ -393,21 +430,14 @@ def _search_kb_handler(query: str, dataset_id: str = "") -> dict:
         dify_upload.BASE = DIFY_BASE_URL
         dify_req = dify_upload.req
 
-        # 搜索知识库
+        # 优先检索核心知识库
         if dataset_id:
             datasets = [dataset_id]
         else:
-            # 获取所有知识库列表
-            st, data = dify_req("/v1/datasets?page=1&limit=50")
-            if isinstance(data, list):
-                datasets = [d["id"] for d in data]
-            elif isinstance(data, dict):
-                datasets = [d["id"] for d in data.get("data", [])]
-            else:
-                return {"error": "获取知识库列表失败"}
+            datasets = [DIFY_DATASET_REQUIREMENTS, DIFY_DATASET_CHANGES, DIFY_DATASET_TESTS]
 
         all_results = []
-        for ds_id in datasets[:2]:  # 最多检索 2 个知识库
+        for ds_id in datasets:
             body = {
                 "query": query,
                 "retrieval_model": {
@@ -441,11 +471,22 @@ def _search_kb_handler(query: str, dataset_id: str = "") -> dict:
         return {"error": "search_kb 执行失败: %s" % str(e)}
 
 
+def _build_kb_handler(repo_path: str, kb_name: str, branch: str = "vnext-b", dataset_id: str = "") -> dict:
+    """工具: 从 Azure DevOps 仓库读取需求文档 → 建 Dify 知识库。"""
+    try:
+        from build_kb import build_kb
+        result = build_kb(repo_path, kb_name, branch=branch, dataset_id=dataset_id or None)
+        return result
+    except Exception as e:
+        return {"error": "build_kb 执行失败: %s" % str(e)}
+
+
 # 工具分发
 TOOL_HANDLERS = {
     "analyze_pr": _analyze_pr_handler,
     "run_test": _run_test_handler,
     "search_kb": _search_kb_handler,
+    "build_kb": _build_kb_handler,
 }
 
 
