@@ -53,7 +53,7 @@ MODEL = os.environ.get("LLM_MODEL", "") or os.environ.get("DASHSCOPE_MODEL", "qw
 
 AZURE_DEVOPS_PAT = os.environ.get("AZURE_DEVOPS_PAT", "")
 DIFY_API_KEY = os.environ.get("DIFY_API_KEY", "")
-DIFY_BASE_URL = os.environ.get("DIFY_BASE_URL", "https://dify-test.uat.autobestdevops.com")
+DIFY_BASE_URL = os.environ.get("DIFY_BASE_URL", "http://localhost:8080")
 
 # Dify 知识库 ID（检索用）
 DIFY_DATASET_REQUIREMENTS = os.environ.get("DIFY_DATASET_REQUIREMENTS",
@@ -62,6 +62,8 @@ DIFY_DATASET_CHANGES = os.environ.get("DIFY_DATASET_CHANGES",
     "5c22985e-90da-4545-bc91-18b1016167f4")  # 需求变更_20260829 (2 docs)
 DIFY_DATASET_TESTS = os.environ.get("DIFY_DATASET_TESTS",
     "52beeba0-3c79-4e31-afc2-1e67f8c6a200")  # 测试方案_20260828_v3 (42 docs)
+DIFY_DATASET_POLICY = os.environ.get("DIFY_DATASET_POLICY",
+    "895ff3bf-c5ac-447e-8f23-41c713b26929")  # Policy需求_20260901_v2 (9 docs)
 
 # 站点 → test 环境 URL 映射（从文件路径自动匹配站点，生成真实测试 URL）
 # test 环境统一格式: https://{site}.uat.autobestdevops.com
@@ -434,7 +436,7 @@ def _search_kb_handler(query: str, dataset_id: str = "") -> dict:
         if dataset_id:
             datasets = [dataset_id]
         else:
-            datasets = [DIFY_DATASET_REQUIREMENTS, DIFY_DATASET_CHANGES, DIFY_DATASET_TESTS]
+            datasets = [DIFY_DATASET_REQUIREMENTS, DIFY_DATASET_CHANGES, DIFY_DATASET_TESTS, DIFY_DATASET_POLICY]
 
         all_results = []
         for ds_id in datasets:
