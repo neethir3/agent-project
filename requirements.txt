@@ -1,0 +1,12 @@
+# Agent 工作台 Python 依赖
+# 安装: pip install -r requirements.txt
+# 然后: playwright install chromium
+
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+openai>=1.0.0
+playwright>=1.40.0
+
+# 可选: LangGraph 编排模式
+# langgraph>=0.2.0

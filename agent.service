@@ -1,0 +1,19 @@
+[Unit]
+Description=Agent 工作台 API 服务
+After=network.target
+
+[Service]
+Type=simple
+User=agent
+WorkingDirectory=/opt/agent
+EnvironmentFile=/opt/agent/.env
+ExecStart=/usr/bin/python3 -m uvicorn server:app --host 127.0.0.1 --port 8800
+Restart=always
+RestartSec=5
+
+# 安全加固
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
