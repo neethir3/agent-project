@@ -362,6 +362,10 @@ def _run_test_handler(test_cases: list) -> dict:
         finally:
             runner.stop()
 
+        # 不传截图 base64 给 LLM（太大），只返回状态摘要
+        for r in results:
+            r.pop("screenshot", None)
+
         passed = sum(1 for r in results if r["status"] == "pass")
         failed = sum(1 for r in results if r["status"] == "fail")
         errors = sum(1 for r in results if r["status"] == "error")
