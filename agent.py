@@ -6,13 +6,15 @@
   - run_test     : Playwright 浏览器自动化测试
   - search_kb    : 检索 Dify 知识库
 
-LLM: 阿里百炼 (DashScope)，兼容 OpenAI API 格式。
+LLM: 兼容 OpenAI API 格式（支持任何 /compatible-mode/v1 端点）。
 
 用法:
   python agent.py  # 启动交互式命令行 Agent
 
 环境变量:
-  DASHSCOPE_API_KEY    阿里百炼 API Key（必填）
+  LLM_API_KEY          LLM API Key（必填）
+  LLM_BASE_URL         LLM 服务地址（必填，如 https://xxx/compatible-mode/v1）
+  LLM_MODEL            模型名称（默认 qwen-plus）
   AZURE_DEVOPS_PAT     Azure DevOps PAT Token（analyze_pr 需要）
   DIFY_API_KEY         Dify 知识库 API Key（search_kb 需要）
   DIFY_BASE_URL        Dify 服务地址（默认 https://dify-test.uat.autobestdevops.com）
@@ -38,9 +40,9 @@ except ImportError:
 
 # ─── 配置 ──────────────────────────────────────────────────────────────────────
 
-DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
-DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-MODEL = os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "") or os.environ.get("DASHSCOPE_API_KEY", "")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "") or os.environ.get("DASHSCOPE_BASE_URL", "")
+MODEL = os.environ.get("LLM_MODEL", "") or os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
 
 AZURE_DEVOPS_PAT = os.environ.get("AZURE_DEVOPS_PAT", "")
 DIFY_API_KEY = os.environ.get("DIFY_API_KEY", "")
@@ -390,12 +392,14 @@ class Agent:
     """
 
     def __init__(self, model=MODEL, use_graph=False):
-        if not DASHSCOPE_API_KEY:
-            raise ValueError("请设置 DASHSCOPE_API_KEY 环境变量")
+        if not LLM_API_KEY:
+            raise ValueError("请设置 LLM_API_KEY 环境变量")
+        if not LLM_BASE_URL:
+            raise ValueError("请设置 LLM_BASE_URL 环境变量")
 
         self.client = OpenAI(
-            api_key=DASHSCOPE_API_KEY,
-            base_url=DASHSCOPE_BASE_URL,
+            api_key=LLM_API_KEY,
+            base_url=LLM_BASE_URL,
         )
         self.model = model
         self.use_graph = use_graph and HAS_LANGGRAPH

@@ -13,7 +13,7 @@
   GET  /api/screenshot         获取截图（by base64 或 URL）
 
 环境变量:
-  DASHSCOPE_API_KEY    阿里百炼 API Key
+  LLM_API_KEY          LLM API Key（OpenAI 兼容接口）
   AZURE_DEVOPS_PAT     Azure DevOps PAT Token
   DIFY_API_KEY         Dify 知识库 API Key
   DIFY_BASE_URL        Dify 服务地址
