@@ -132,7 +132,7 @@ def create_kb(name):
     def _try_create(b):
         st, r = dify_req("/v1/datasets", "POST", b)
         if isinstance(r, dict) and r.get("id"):
-            return r["id"], b["name"]
+            return r["id"], b["name"], st, r
         return None, None, st, r
 
     did, actual_name, st, res = _try_create(body)
