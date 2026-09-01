@@ -60,37 +60,38 @@ DIFY_BASE_URL = os.environ.get("DIFY_BASE_URL", "https://dify-test.uat.autobestd
 # 生产环境域名参考（仅文档用，Agent 不碰生产）
 
 def _site_test_url(site: str) -> str:
-    """根据站点代码生成 test 环境 URL。"""
-    return "https://%s.test.autobestdevops.com" % site.lower()
+    """根据站点代码获取 test 环境 URL。"""
+    s = site.lower()
+    return SITE_DOMAINS.get(s, "https://%s.test.autobestdevops.com" % s)
 
-# 生产域名参考（Agent 不碰生产，仅用于启发式匹配）
-PROD_DOMAINS = {
+# test 环境域名映射（Agent 测试用，自动匹配站点代码 → 真实 test URL）
+SITE_DOMAINS = {
     # 加州网站
-    "apw": "https://www.acurapartswarehouse.com/",
-    "bpd": "https://www.bmwpartsdeal.com/",
-    "fpg": "https://www.fordpartsgiant.com/",
-    "gpg": "https://www.gmpartsgiant.com/",
-    "hpd": "https://www.hyundaipartsdeal.com/",
-    "hpn": "https://www.hondapartsnow.com/",
-    "ipd": "https://www.infinitipartsdeal.com/",
-    "kpn": "https://www.kiapartsnow.com/",
-    "lpn": "https://www.lexuspartsnow.com/",
-    "mpg": "https://www.moparpartsgiant.com/",
-    "npd": "https://www.nissanpartsdeal.com/",
-    "spd": "https://www.subarupartsdeal.com/",
-    "tpd": "https://www.toyotapartsdeal.com/",
+    "apw": "https://apw.test.autobestdevops.com",
+    "bpd": "https://bpd.test.autobestdevops.com",
+    "fpg": "https://fpg.test.autobestdevops.com",
+    "gpg": "https://gpg.test.autobestdevops.com",
+    "hpd": "https://hpd.test.autobestdevops.com",
+    "hpn": "https://hpn.test.autobestdevops.com",
+    "ipd": "https://ipd.test.autobestdevops.com",
+    "kpn": "https://kpn.test.autobestdevops.com",
+    "lpn": "https://lpn.test.autobestdevops.com",
+    "mpg": "https://mpg.test.autobestdevops.com",
+    "npd": "https://npd.test.autobestdevops.com",
+    "spd": "https://spd.test.autobestdevops.com",
+    "tpd": "https://tpd.test.autobestdevops.com",
     # 新网站
-    "adpg": "https://www.audipartsgiant.com/",
-    "mbpg": "https://www.mbpartsgiant.com/",
-    "mzpn": "https://www.mazdapartsnow.com/",
-    "mtpg": "https://www.mitsubishipartsgiant.com/",
-    "vpg": "https://www.volvopartsgiant.com/",
-    "vwpg": "https://www.vwpartsgiant.com/",
+    "adpg": "https://adpg.test.autobestdevops.com",
+    "mbpg": "https://mbpg.test.autobestdevops.com",
+    "mzpn": "https://mzpn.test.autobestdevops.com",
+    "mtpg": "https://mtpg.test.autobestdevops.com",
+    "vpg": "https://vpg.test.autobestdevops.com",
+    "vwpg": "https://vwpg.test.autobestdevops.com",
     # 第二网站
-    "cpd": "https://www.chevypartsdeal.com/",
-    "fpd": "https://www.fordpartsdeal.com/",
-    "jpd": "https://www.jeeppartsdeal.com/",
-    "tpn": "https://www.toyotapartsnow.com/",
+    "cpd": "https://cpd.test.autobestdevops.com",
+    "fpd": "https://fpd.test.autobestdevops.com",
+    "jpd": "https://jpd.test.autobestdevops.com",
+    "tpn": "https://tpn.test.autobestdevops.com",
 }
 
 # ─── 工具定义 ──────────────────────────────────────────────────────────────────
@@ -282,7 +283,7 @@ def _generate_test_suggestions(changed_files: list) -> list:
         path = f["path"]
         # 提取站点信息
         import re
-        sites = re.findall(r'\b(%s)\b' % "|".join(PROD_DOMAINS.keys()), path, re.IGNORECASE)
+        sites = re.findall(r'\b(%s)\b' % "|".join(SITE_DOMAINS.keys()), path, re.IGNORECASE)
         sites = list(set(s.lower() for s in sites))
         if not sites:
             sites = ["bpd"]  # 默认站点
