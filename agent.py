@@ -22,6 +22,13 @@ LLM: 兼容 OpenAI API 格式（支持任何 /compatible-mode/v1 端点）。
 import sys, os, json, asyncio, base64
 from typing import TypedDict, Annotated, Optional
 
+# 自动加载 .env 文件
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+except ImportError:
+    pass
+
 try:
     from openai import OpenAI
 except ImportError:
