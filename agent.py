@@ -329,14 +329,18 @@ def _search_kb_handler(query: str, dataset_id: str = "") -> dict:
         return {"error": "未配置 DIFY_API_KEY 环境变量"}
 
     try:
-        from dify_upload import req as dify_req
+        import dify_upload
+        # 注入配置到 dify_upload 模块
+        dify_upload.KEY = DIFY_API_KEY
+        dify_upload.BASE = DIFY_BASE_URL
+        dify_req = dify_upload.req
 
         # 搜索知识库
         if dataset_id:
             datasets = [dataset_id]
         else:
             # 获取所有知识库列表
-            st, data = dify_req(DIFY_BASE_URL, DIFY_API_KEY, "/v1/datasets?page=1&limit=50")
+            st, data = dify_req("/v1/datasets?page=1&limit=50")
             if isinstance(data, list):
                 datasets = [d["id"] for d in data]
             elif isinstance(data, dict):
@@ -357,7 +361,6 @@ def _search_kb_handler(query: str, dataset_id: str = "") -> dict:
                 },
             }
             st, res = dify_req(
-                DIFY_BASE_URL, DIFY_API_KEY,
                 "/v1/datasets/%s/retrieve" % ds_id, "POST", body
             )
             if st == 200 and isinstance(res, dict):
