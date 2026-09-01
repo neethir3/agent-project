@@ -56,24 +56,42 @@ DIFY_API_KEY = os.environ.get("DIFY_API_KEY", "")
 DIFY_BASE_URL = os.environ.get("DIFY_BASE_URL", "https://dify-test.uat.autobestdevops.com")
 
 # 站点 → test 环境 URL 映射（从文件路径自动匹配站点，生成真实测试 URL）
-SITE_URL_MAP = {
-    "bpd": "https://bpd.test.autobestdevops.com",
-    "apw": "https://apw.test.autobestdevops.com",
-    "gpg": "https://gpg.test.autobestdevops.com",
-    "npa": "https://npa.test.autobestdevops.com",
-    "npp": "https://npp.test.autobestdevops.com",
-    "wpi": "https://wpi.test.autobestdevops.com",
-    "ape": "https://ape.test.autobestdevops.com",
-    "bpe": "https://bpe.test.autobestdevops.com",
-    "npe": "https://npe.test.autobestdevops.com",
-    "wpe": "https://wpe.test.autobestdevops.com",
+# test 环境统一格式: https://{site}.test.autobestdevops.com
+# 生产环境域名参考（仅文档用，Agent 不碰生产）
+
+def _site_test_url(site: str) -> str:
+    """根据站点代码生成 test 环境 URL。"""
+    return "https://%s.test.autobestdevops.com" % site.lower()
+
+# 生产域名参考（Agent 不碰生产，仅用于启发式匹配）
+PROD_DOMAINS = {
+    # 加州网站
+    "apw": "https://www.acurapartswarehouse.com/",
+    "bpd": "https://www.bmwpartsdeal.com/",
+    "fpg": "https://www.fordpartsgiant.com/",
+    "gpg": "https://www.gmpartsgiant.com/",
+    "hpd": "https://www.hyundaipartsdeal.com/",
+    "hpn": "https://www.hondapartsnow.com/",
+    "ipd": "https://www.infinitipartsdeal.com/",
+    "kpn": "https://www.kiapartsnow.com/",
+    "lpn": "https://www.lexuspartsnow.com/",
+    "mpg": "https://www.moparpartsgiant.com/",
+    "npd": "https://www.nissanpartsdeal.com/",
+    "spd": "https://www.subarupartsdeal.com/",
+    "tpd": "https://www.toyotapartsdeal.com/",
+    # 新网站
+    "adpg": "https://www.audipartsgiant.com/",
+    "mbpg": "https://www.mbpartsgiant.com/",
+    "mzpn": "https://www.mazdapartsnow.com/",
+    "mtpg": "https://www.mitsubishipartsgiant.com/",
+    "vpg": "https://www.volvopartsgiant.com/",
+    "vwpg": "https://www.vwpartsgiant.com/",
+    # 第二网站
+    "cpd": "https://www.chevypartsdeal.com/",
+    "fpd": "https://www.fordpartsdeal.com/",
+    "jpd": "https://www.jeeppartsdeal.com/",
+    "tpn": "https://www.toyotapartsnow.com/",
 }
-# 可通过环境变量覆盖: SITE_URL_MAP=bpd:https://...,apw:https://...
-if os.environ.get("SITE_URL_MAP"):
-    for pair in os.environ["SITE_URL_MAP"].split(","):
-        if ":" in pair:
-            k, v = pair.split(":", 1)
-            SITE_URL_MAP[k.strip()] = v.strip()
 
 # ─── 工具定义 ──────────────────────────────────────────────────────────────────
 
@@ -264,7 +282,7 @@ def _generate_test_suggestions(changed_files: list) -> list:
         path = f["path"]
         # 提取站点信息
         import re
-        sites = re.findall(r'\b(apw|bpd|gpg|npa|npp|wpi|ape|bpe|npe|wpe)\b', path, re.IGNORECASE)
+        sites = re.findall(r'\b(%s)\b' % "|".join(PROD_DOMAINS.keys()), path, re.IGNORECASE)
         sites = list(set(s.lower() for s in sites))
         if not sites:
             sites = ["bpd"]  # 默认站点
@@ -273,8 +291,7 @@ def _generate_test_suggestions(changed_files: list) -> list:
         def _make_test(desc, url_suffix, check_type, expected):
             nonlocal tid
             tid += 1
-            urls = [SITE_URL_MAP.get(s, "https://%s.test.autobestdevops.com" % s) + url_suffix
-                    for s in sites]
+            urls = [_site_test_url(s) + url_suffix for s in sites]
             return {
                 "id": tid,
                 "description": desc,
