@@ -277,6 +277,24 @@ def _analyze_pr_handler(pr_url: str) -> dict:
         # 生成建议的测试用例
         suggested_tests = _generate_test_suggestions(changed_files)
 
+        # 自动检索知识库，补充需求上下文
+        kb_context = []
+        try:
+            # 用 PR 标题和文件路径做检索词
+            queries = [title]
+            for f in changed_files[:3]:
+                name = f["path"].split("/")[-1].replace(".md", "").replace("_", " ")
+                queries.append(name)
+            for q in queries[:2]:  # 最多搜 2 次
+                r = _search_kb_handler(q)
+                if r.get("results"):
+                    kb_context.append({
+                        "query": q,
+                        "top_hits": [{"content": x["content"][:200], "score": x["score"]} for x in r["results"][:2]]
+                    })
+        except Exception:
+            pass  # KB 检索失败不影响主流程
+
         return {
             "pr_id": pr_id,
             "pr_title": title,
@@ -286,6 +304,7 @@ def _analyze_pr_handler(pr_url: str) -> dict:
             "changed_files": changed_files,
             "changed_file_count": len(changed_files),
             "suggested_tests": suggested_tests,
+            "kb_context": kb_context,  # 知识库关联上下文
         }
 
     except Exception as e:
