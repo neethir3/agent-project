@@ -201,6 +201,102 @@ class TestRunner:
             results.append(r)
         return results
 
+    def explore_page(self, url: str, wait_until: str = "networkidle") -> dict:
+        """探索页面：提取所有链接和页面结构信息。
+
+        返回:
+          {
+            "url": "页面 URL",
+            "title": "页面标题",
+            "links": [{"text": "链接文字", "href": "链接地址", "selector": "CSS选择器"}, ...],
+            "total_links": 42,
+            "internal_links": [只包含同域名的链接],
+            "error": "",
+          }
+        """
+        result = {
+            "url": url,
+            "title": "",
+            "links": [],
+            "total_links": 0,
+            "internal_links": [],
+            "error": "",
+        }
+
+        context = None
+        page = None
+        try:
+            context = self._browser.new_context(
+                viewport=self.viewport,
+                ignore_https_errors=True,
+            )
+            page = context.new_page()
+            page.set_default_timeout(self.timeout)
+            page.goto(url, wait_until=wait_until)
+
+            import time
+            time.sleep(2)  # 等 JS 渲染完毕
+
+            result["title"] = page.title()
+
+            # 提取所有链接
+            from urllib.parse import urlparse
+            base_domain = urlparse(url).netloc
+
+            links = page.evaluate("""() => {
+                const links = [];
+                document.querySelectorAll('a[href]').forEach((el, i) => {
+                    const href = el.href || '';
+                    const text = (el.innerText || el.textContent || '').trim().substring(0, 200);
+                    // 生成唯一选择器
+                    let selector = '';
+                    if (el.id) selector = '#' + el.id;
+                    else if (el.className && typeof el.className === 'string') {
+                        selector = el.tagName.toLowerCase() + '.' + el.className.split(' ').filter(c => c).slice(0, 2).join('.');
+                    }
+                    if (!selector || document.querySelectorAll(selector).length > 1) {
+                        selector = el.tagName.toLowerCase() + '[href="' + el.getAttribute('href') + '"]';
+                    }
+                    links.push({
+                        text: text,
+                        href: href,
+                        selector: selector
+                    });
+                });
+                return links;
+            }""")
+
+            result["links"] = links
+            result["total_links"] = len(links)
+
+            # 分离内部链接
+            internal = []
+            for link in links:
+                href = link.get("href", "")
+                if not href:
+                    continue
+                try:
+                    parsed = urlparse(href)
+                    if parsed.netloc == base_domain or not parsed.netloc:
+                        # 同域名或相对路径
+                        if parsed.path and parsed.path != "/":
+                            internal.append(link)
+                except Exception:
+                    pass
+
+            result["internal_links"] = internal
+
+        except Exception as e:
+            result["error"] = str(e)
+
+        finally:
+            if page:
+                page.close()
+            if context:
+                context.close()
+
+        return result
+
 
 # ─── 命令行入口 ────────────────────────────────────────────────────────────────
 

@@ -67,14 +67,12 @@ DIFY_DATASET_POLICY = os.environ.get("DIFY_DATASET_POLICY",
 
 # 站点 → test 环境 URL 映射（从文件路径自动匹配站点，生成真实测试 URL）
 # test 环境统一格式: https://{site}.uat.autobestdevops.com
-# 生产环境域名参考（仅文档用，Agent 不碰生产）
 
 def _site_test_url(site: str) -> str:
     """根据站点代码获取 test 环境 URL。"""
     s = site.lower()
     return SITE_DOMAINS.get(s, "https://%s.uat.autobestdevops.com" % s)
 
-# test 环境域名映射（Agent 测试用，自动匹配站点代码 → 真实 test URL）
 SITE_DOMAINS = {
     # 加州网站
     "apw": "https://apw.uat.autobestdevops.com",
@@ -104,6 +102,111 @@ SITE_DOMAINS = {
     "tpn": "https://tpn.uat.autobestdevops.com",
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════════
+# 站点页面结构（告知 LLM 每个站点的页面和 URL，避免猜测）
+# ═══════════════════════════════════════════════════════════════════════════════════
+# 所有 23 个站点共享同一套代码，URL 结构相同，仅品牌前缀不同
+# URL 模板: /service/{brand}-{page_slug}.html
+# 部分页面无品牌前缀，如 Contact Us: /service/contact/us.html
+
+# 站点代码 → 品牌前缀（URL 中的品牌标识）
+SITE_BRAND = {
+    "bpd": "bmw",      # BMWPartsDeal
+    "apw": "audi",     # AudiPartsDeal (待确认)
+    "fpg": "ford",     # FordPartsGiant (待确认)
+    "gpg": "gm",       # GMPartsGiant (待确认)
+    "hpd": "honda",    # HondaPartsDeal (待确认)
+    "hpn": "honda",    # HondaPartsNow (待确认)
+    "ipd": "infiniti", # InfinitiPartsDeal (待确认)
+    "kpn": "kia",      # KiaPartsNow (待确认)
+    "lpn": "lexus",    # LexusPartsNow (待确认)
+    "mpg": "mopar",    # MoparPartsGiant (待确认)
+    "npd": "nissan",   # NissanPartsDeal (待确认)
+    "spd": "subaru",   # SubaruPartsDeal (待确认)
+    "tpd": "toyota",   # ToyotaPartsDeal (待确认)
+    "adpg": "audi",    # (待确认)
+    "mbpg": "mercedes",# (待确认)
+    "mzpn": "mazda",   # (待确认)
+    "mtpg": "mitsubishi", # (待确认)
+    "vpg": "volvo",    # (待确认)
+    "vwpg": "vw",      # (待确认)
+    "cpd": "chevrolet",# (待确认)
+    "fpd": "ford",     # (待确认)
+    "jpd": "jeep",     # (待确认)
+    "tpn": "toyota",   # (待确认)
+}
+
+# 页面类型 → URL 模板（{brand} 替换为 SITE_BRAND 中的品牌前缀）
+PAGE_URL_TEMPLATES = {
+    # Policy 页面
+    "privacy policy":    "/service/{brand}-privacy_policy.html",
+    "terms of use":      "/service/{brand}-terms_of_use.html",
+    "sales policy":      "/service/{brand}-sales_policy.html",
+    "return policy":     "/service/{brand}-return_policy.html",
+    "shipping policy":   "/service/{brand}-shipping_policy.html",
+    "warranty policy":   "/service/{brand}-warranty_policy.html",
+    # 信息页面
+    "about us":          "/service/{brand}-about_us.html",
+    "contact us":        "/service/contact/us.html",       # 无品牌前缀
+    "help center":       "/service/{brand}-help_center.html",
+    "faq":               "/service/{brand}-faq.html",
+    "accessibility":     "/service/{brand}-accessibility.html",
+    "customer reviews":  "/service/{brand}-customer_reviews.html",
+    "site map":          "/sitemap.html",
+    # 功能页面
+    "track order":       "/online/track/order",
+    "login":             "/online/login",
+    "my account":        "/online/account/dashboard",
+    "vin decoder":       "/vin-decoder.html",
+    "parts availability":"/online/tool/pa/check",
+    "rma":               "/online/tool/rma",
+    # 首页
+    "home":              "/",
+    "footer":            "/",                              # Footer 在首页
+}
+
+
+def _page_url(site: str, page_name: str) -> str:
+    """根据站点代码和页面名称，返回实际 UAT URL。"""
+    base = _site_test_url(site)
+    brand = SITE_BRAND.get(site.lower(), site.lower())
+    page_key = page_name.lower().strip()
+
+    # 精确匹配
+    template = PAGE_URL_TEMPLATES.get(page_key)
+    if not template:
+        # 模糊匹配
+        for key, tmpl in PAGE_URL_TEMPLATES.items():
+            if key in page_key or page_key in key:
+                template = tmpl
+                break
+
+    if template:
+        path = template.replace("{brand}", brand)
+        return base + path
+    return base + "/"
+
+
+def _build_site_structure_text() -> str:
+    """生成站点页面结构描述文本，注入 LLM system prompt。"""
+    lines = ["## 站点页面结构（所有站点共享同一套 URL 模板）\n"]
+    lines.append("每个站点域名: https://{site_code}.uat.autobestdevops.com")
+    lines.append("品牌前缀: 每个站点有不同的品牌标识，如 bpd 对应 bmw\n")
+    lines.append("### 页面 URL 模板（{brand} 替换为站点品牌前缀）:\n")
+    for page_name, template in sorted(PAGE_URL_TEMPLATES.items()):
+        lines.append(f"- {page_name}: `{template}`")
+    lines.append("\n### 站点 → 品牌前缀:\n")
+    for site, brand in sorted(SITE_BRAND.items()):
+        lines.append(f"- {site}: `{brand}`")
+    lines.append("\n### 从 PR 变更文件推断页面:\n")
+    lines.append("PR 变更文件路径如 `/Frontend_正厂整合需求/Policy/1.第一网站/Privacy Policy.md`")
+    lines.append("→ 文件名去掉 .md 即为页面名称 → 查上表得 URL 模板 → 替换品牌前缀 → 得实际 URL")
+    lines.append("例如: Privacy Policy → /service/{brand}-privacy_policy.html → bpd 站点 → /service/bmw-privacy_policy.html")
+    return "\n".join(lines)
+
+
+SITE_STRUCTURE_TEXT = _build_site_structure_text()
+
 # ─── 工具定义 ──────────────────────────────────────────────────────────────────
 
 TOOLS = [
@@ -111,7 +214,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "analyze_pr",
-            "description": "分析 Azure DevOps PR：下载 diff、上传 Dify 知识库、检索相关需求、生成结构化测试计划。",
+            "description": "分析 Azure DevOps PR：下载 diff → 按文件路径检索 Dify 知识库 → 返回变更文件+需求上下文。注意：返回的 suggested_tests 不含精确 URL，需先用 explore_site 探索站点获取实际链接，匹配 file_name 后再用 run_test 执行测试。标准流程: analyze_pr → explore_site → 匹配链接 → run_test",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -128,7 +231,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "run_test",
-            "description": "在 test 环境执行浏览器自动化测试（Playwright），验证页面内容、元素、URL 等。",
+            "description": "在 UAT 环境执行浏览器自动化测试（Playwright）。重要：不要猜测 URL！必须先用 explore_site 探索站点获取实际链接，匹配到正确 URL 后再调用此工具。测试失败时分析 actual 内容判断是 404 还是内容缺失。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -198,6 +301,23 @@ TOOLS = [
                     },
                 },
                 "required": ["repo_path", "kb_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "explore_site",
+            "description": "用 Playwright 打开一个页面，自动提取所有链接。用于发现页面的实际 URL 结构，避免猜测路径。返回页面标题、所有内部链接（文字+URL），供后续匹配 PR 变更文件并精准测试。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "页面入口 URL，如 https://bpd.uat.autobestdevops.com/",
+                    },
+                },
+                "required": ["url"],
             },
         },
     },
@@ -277,21 +397,33 @@ def _analyze_pr_handler(pr_url: str) -> dict:
         # 生成建议的测试用例
         suggested_tests = _generate_test_suggestions(changed_files)
 
-        # 自动检索知识库，补充需求上下文
+        # 自动检索知识库，用 diff 文件路径精确匹配需求文档
         kb_context = []
         try:
-            # 用 PR 标题和文件路径做检索词
-            queries = [title]
-            for f in changed_files[:3]:
-                name = f["path"].split("/")[-1].replace(".md", "").replace("_", " ")
-                queries.append(name)
-            for q in queries[:2]:  # 最多搜 2 次
-                r = _search_kb_handler(q)
-                if r.get("results"):
-                    kb_context.append({
-                        "query": q,
-                        "top_hits": [{"content": x["content"][:200], "score": x["score"]} for x in r["results"][:2]]
-                    })
+            for f in changed_files:
+                file_path = f["path"]
+                # 取文件名（去掉 .md）和父目录名
+                file_name = file_path.split("/")[-1].replace(".md", "")
+                parts = file_path.strip("/").split("/")
+                parent_dir = parts[-2] if len(parts) >= 2 else ""
+                # 构造多个检索词，从精确到模糊
+                search_queries = []
+                if parent_dir and parent_dir not in file_name:
+                    search_queries.append("%s %s" % (parent_dir, file_name))
+                search_queries.append(file_name)
+                if parent_dir:
+                    search_queries.append(parent_dir)  # 模糊兜底
+                # 逐个尝试，找到第一个高分匹配
+                for q in search_queries:
+                    r = _search_kb_handler(q)
+                    if r.get("results") and r["results"][0]["score"] > 0.3:
+                        kb_context.append({
+                            "file": file_path,
+                            "kb_match": r["results"][0]["content"][:500],
+                            "score": r["results"][0]["score"],
+                            "query": q,
+                        })
+                        break  # 找到匹配就下一个文件
         except Exception:
             pass  # KB 检索失败不影响主流程
 
@@ -332,60 +464,53 @@ def _summarize_diff(diff_text: str) -> str:
 
 
 def _generate_test_suggestions(changed_files: list) -> list:
-    """根据变更文件生成测试建议，自动解析站点 URL。"""
+    """根据变更文件生成测试建议，自动匹配站点结构生成精确 URL。
+
+    使用 SITE_BRAND + PAGE_URL_TEMPLATES 查表，不再硬编码或猜测。
+    """
     tests = []
     tid = 0
 
-    # 从变更文件路径推断站点和测试范围
+    import re as re_mod
+
+    # 从变更文件路径提取站点
+    all_sites = set()
     for f in changed_files:
         path = f["path"]
-        # 提取站点信息
-        import re
-        sites = re.findall(r'\b(%s)\b' % "|".join(SITE_DOMAINS.keys()), path, re.IGNORECASE)
-        sites = list(set(s.lower() for s in sites))
-        if not sites:
-            sites = ["bpd"]  # 默认站点
+        sites = re_mod.findall(r'\b(%s)\b' % "|".join(SITE_DOMAINS.keys()), path, re.IGNORECASE)
+        all_sites.update(s.lower() for s in sites)
+    if not all_sites:
+        all_sites = {"bpd"}
 
-        # 生成实际测试 URL（每个站点一条）
-        def _make_test(desc, url_suffix, check_type, expected):
-            nonlocal tid
+    for f in changed_files:
+        path = f["path"]
+        file_name = path.split("/")[-1].replace(".md", "").strip()
+        diff_summary = f.get("diff_summary", "")
+
+        # 从 diff 提取关键词
+        keywords = []
+        if "新增:" in diff_summary:
+            added = diff_summary.split("新增:")[1].split("|")[0].strip()
+            for word in added.split("; ")[:2]:
+                word = word.strip().strip('"').strip("'")
+                if len(word) >= 5 and not word.startswith("http"):
+                    keywords.append(word[:80])
+
+        for site in sorted(all_sites):
             tid += 1
-            urls = [_site_test_url(s) + url_suffix for s in sites]
-            return {
-                "id": tid,
-                "description": desc,
-                "test_urls": urls,  # 解析后的真实 URL 列表
-                "check_type": check_type,
-                "expected": expected,
-                "sites": sites,
-            }
+            # 用页面结构查表生成精确 URL
+            test_url = _page_url(site, file_name)
 
-        # 根据文件路径推断测试 URL 模式
-        if "privacy-policy" in path.lower() or "privacy policy" in path.lower():
-            tests.append(_make_test(
-                "验证 Privacy Policy 页面更新",
-                "/privacy-policy", "content", "Last Updated"
-            ))
-        elif "terms" in path.lower():
-            tests.append(_make_test(
-                "验证 Terms of Use 页面更新",
-                "/terms-of-use", "content", "Terms"
-            ))
-        elif "sales" in path.lower() and "policy" in path.lower():
-            tests.append(_make_test(
-                "验证 Sales Policy 页面更新",
-                "/sales-policy", "screenshot", ""
-            ))
-        elif "footer" in path.lower():
-            tests.append(_make_test(
-                "验证 Footer 更新",
-                "", "element", "footer"
-            ))
-        else:
-            tests.append(_make_test(
-                "验证变更文件 %s 对应页面" % path.split("/")[-1].replace(".md", ""),
-                "", "screenshot", ""
-            ))
+            tests.append({
+                "id": tid,
+                "description": "验证 %s 页面更新 [%s]" % (file_name, site.upper()),
+                "test_url": test_url,
+                "file_name": file_name,
+                "keywords": keywords,
+                "check_type": "content" if keywords else "screenshot",
+                "expected": keywords[0] if keywords else "",
+                "sites": [site],
+            })
 
     return tests
 
@@ -503,11 +628,27 @@ def _build_kb_handler(repo_path: str, kb_name: str, branch: str = "vnext-b", dat
 
 
 # 工具分发
+def _explore_site_handler(url: str) -> dict:
+    """工具: 用 Playwright 探索页面，提取所有链接。"""
+    try:
+        from test_runner import TestRunner
+        runner = TestRunner(headless=True)
+        runner.start()
+        try:
+            result = runner.explore_page(url)
+        finally:
+            runner.stop()
+        return result
+    except Exception as e:
+        return {"error": "explore_site 执行失败: %s" % str(e)}
+
+
 TOOL_HANDLERS = {
     "analyze_pr": _analyze_pr_handler,
     "run_test": _run_test_handler,
     "search_kb": _search_kb_handler,
     "build_kb": _build_kb_handler,
+    "explore_site": _explore_site_handler,
 }
 
 
@@ -533,7 +674,26 @@ class Agent:
         )
         self.model = model
         self.use_graph = use_graph and HAS_LANGGRAPH
-        self.messages = []
+        self.messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是 AutoBest 前端需求测试专家。\n\n"
+                    "## 核心工作流\n"
+                    "1. analyze_pr → 获取 PR 变更文件 + diff + 知识库需求上下文\n"
+                    "2. 根据变更文件名匹配页面 URL（见下方站点结构）\n"
+                    "3. explore_site → 可选：验证页面确实存在\n"
+                    "4. run_test → 执行测试\n\n"
+                    "## 规则\n"
+                    "- 不要猜测 URL！用下方站点结构表查\n"
+                    "- 变更文件路径如 /Frontend_正厂整合需求/Policy/1.第一网站/Privacy Policy.md\n"
+                    "  文件名 = Privacy Policy → 查表得 /service/{brand}-privacy_policy.html\n"
+                    "- 测试失败时先确认 URL 正确，再判断内容问题\n"
+                    "- 结合 Dify KB 需求原文 + diff 变更做综合分析\n\n"
+                    + SITE_STRUCTURE_TEXT
+                ),
+            }
+        ]
 
         if self.use_graph:
             self._build_graph()
@@ -600,7 +760,7 @@ class Agent:
             return self._chat_graph()
 
         # 简单模式: 循环调用 LLM + 工具
-        max_turns = 5
+        max_turns = 10
         for _ in range(max_turns):
             response = self.client.chat.completions.create(
                 model=self.model,
