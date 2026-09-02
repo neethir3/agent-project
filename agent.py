@@ -95,12 +95,13 @@ SITE_DOMAINS = {
     "mtpg": "https://mtpg.uat.autobestdevops.com",
     "vpg": "https://vpg.uat.autobestdevops.com",
     "vwpg": "https://vwpg.uat.autobestdevops.com",
-    # 第二网站
+    # 第二网站（排除测试）
     "cpd": "https://cpd.uat.autobestdevops.com",
     "fpd": "https://fpd.uat.autobestdevops.com",
     "jpd": "https://jpd.uat.autobestdevops.com",
     "tpn": "https://tpn.uat.autobestdevops.com",
 }
+EXCLUDED_SITES = {"cpd", "fpd", "jpd", "tpn"}
 
 # ═══════════════════════════════════════════════════════════════════════════════════
 # 站点页面结构（告知 LLM 每个站点的页面和 URL，避免猜测）
@@ -508,6 +509,8 @@ def _generate_test_suggestions(changed_files: list) -> list:
         all_sites.update(s.lower() for s in sites)
     if not all_sites:
         all_sites = {"bpd"}
+    # 排除第二网站
+    all_sites = all_sites - EXCLUDED_SITES
 
     for f in changed_files:
         path = f["path"]
@@ -778,7 +781,8 @@ class Agent:
                     "## 站点分组\n"
                     "第一网站(加州): APW, BPD, FPG, GPG, HPD, HPN, IPD, KPN, LPN, MPG, NPD, SPD, TPD (13个)\n"
                     "新网站: ADPG, MBPG, MZPN, MTPG, VPG, VWPG (6个)\n"
-                    "第二网站: CPD, FPD, JPD, TPN (4个)\n"
+                    "第二网站: CPD, FPD, JPD, TPN (4个，当前排除测试)\n"
+                    "第二网站 URL 格式: 用横杠、无 .html 后缀（如 /service/toyota-privacy-policy）\n\n"
                     "所有站点共享同一套代码，URL 结构相同仅品牌前缀不同。\n\n"
                     "## 核心工作流\n"
                     "1. analyze_pr → 获取 PR 变更文件 + diff + Dify 知识库需求上下文\n"
@@ -791,6 +795,7 @@ class Agent:
                     "  文件名 = Privacy Policy → keyword='privacy_policy'\n"
                     "- 测试失败时先确认 URL 正确，再判断内容问题\n"
                     "- 结合 Dify KB 需求原文 + diff 变更做综合分析\n"
+                    "- 排除第二网站（CPD, FPD, JPD, TPN），不为其生成测试\n"
                 ),
             }
         ]
