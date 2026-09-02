@@ -52,9 +52,9 @@ def azure_api_req(base_url, token, path, method="GET", body=None):
     r = urllib.request.Request(base_url + path, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(r, timeout=180) as resp:
-            return resp.status, json.loads(resp.read().decode("utf-8"))
+            return resp.status, json.loads(resp.read().decode("utf-8", errors="replace"))
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
+        return e.code, e.read().decode("utf-8", errors="replace")
     except Exception as e:
         return 0, repr(e)
 
@@ -100,7 +100,16 @@ def get_file_content(base_url, token, repo_id, file_path, commit_id):
     r = urllib.request.Request(url, method="GET", headers=headers)
     try:
         with urllib.request.urlopen(r, timeout=180) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
+            raw_bytes = resp.read()
+            # 尝试多种编码（Azure DevOps 文件可能是 GBK 编码的中文内容）
+            for enc in ("utf-8", "gbk", "gb2312", "gb18030", "latin-1"):
+                try:
+                    raw = raw_bytes.decode(enc)
+                    break
+                except (UnicodeDecodeError, LookupError):
+                    continue
+            else:
+                raw = raw_bytes.decode("utf-8", errors="replace")
             if raw.startswith("{") and "message" in raw[:200]:
                 print("  获取文件内容失败 [%s]: %s" % (file_path, raw[:200]))
                 return None
@@ -136,9 +145,9 @@ def dify_req(base, key, path, method="GET", body=None):
     r = urllib.request.Request(base + path, data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(r, timeout=180) as resp:
-            return resp.status, json.loads(resp.read().decode("utf-8"))
+            return resp.status, json.loads(resp.read().decode("utf-8", errors="replace"))
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
+        return e.code, e.read().decode("utf-8", errors="replace")
     except Exception as e:
         return 0, repr(e)
 

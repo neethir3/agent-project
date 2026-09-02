@@ -321,6 +321,31 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "db_lookup_url",
+            "description": "从数据库查站点页面的精确 URL。AutoPart_DecodeUrl_{SITE} 表包含所有页面类型和 URL。不要猜 URL，用这个工具查！用法: site=站点代码(如HPN), keyword=页面关键词(如privacy_policy), type=页面类型(默认Service)。返回完整的 https:// URL。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "site": {
+                        "type": "string",
+                        "description": "站点代码，如 HPN, BPD, APW, FPG 等",
+                    },
+                    "keyword": {
+                        "type": "string",
+                        "description": "页面关键词，如 privacy_policy, sales_policy, about_us, contact, warranty 等",
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "页面类型，默认 Service（policy页面）。可选: Home, Model, Category, PL, YearPD, Sitemap 等",
+                    },
+                },
+                "required": ["site", "keyword"],
+            },
+        },
+    },
 ]
 
 
@@ -643,12 +668,99 @@ def _explore_site_handler(url: str) -> dict:
         return {"error": "explore_site 执行失败: %s" % str(e)}
 
 
+# AutoPart_DecodeUrl 表名映射（每个站点的主表）
+DB_DECODE_TABLE = {
+    "adpg": "AutoPart_DecodeUrl_ADPG",
+    "apw": "AutoPart_DecodeUrl_APW_Prod",
+    "bpd": "AutoPart_DecodeUrl_BPD_Prod_2024_0723",
+    "cpd": "AutoPart_DecodeUrl_CPD",
+    "cpg": "AutoPart_DecodeUrl_CPG_Prod",
+    "fpd": "AutoPart_DecodeUrl_FPD",
+    "fpg": "AutoPart_DecodeUrl_FPG",
+    "gpg": "AutoPart_DecodeUrl_GPG",
+    "hpd": "AutoPart_DecodeUrl_HPD",
+    "hpn": "AutoPart_DecodeUrl_HPN",
+    "ipd": "AutoPart_DecodeUrl_IPD_Prod",
+    "jpd": "AutoPart_DecodeUrl_JPD",
+    "kpn": "AutoPart_DecodeUrl_KPN",
+    "lpn": "AutoPart_DecodeUrl_LPN",
+    "mbpg": "AutoPart_DecodeUrl_MBPG",
+    "mpg": "AutoPart_DecodeUrl_MPG_Prod",
+    "mtpg": "AutoPart_DecodeUrl_MTPG",
+    "mzpn": "AutoPart_DecodeUrl_MZPN",
+    "npd": "AutoPart_DecodeUrl_NPD",
+    "spd": "AutoPart_DecodeUrl_SPD",
+    "tpd": "AutoPart_DecodeUrl_TPD",
+    "tpn": "AutoPart_DecodeUrl_tpn_2026_2_13",
+    "vpg": "AutoPart_DecodeUrl_VPG",
+    "vwpg": "AutoPart_DecodeUrl_VWPG",
+}
+
+# 数据库连接配置
+DB_CONFIG = {
+    "server": "172.24.200.163",
+    "port": 1433,
+    "user": "testteam",
+    "password": "D5swwikd1*0#",
+    "database": "AutobestSeo",
+}
+
+
+def _db_lookup_url_handler(site: str, keyword: str, type: str = "Service") -> dict:
+    """工具: 从数据库查站点页面的精确 URL。"""
+    try:
+        import pymssql
+
+        table = DB_DECODE_TABLE.get(site.lower())
+        if not table:
+            return {"error": "站点 %s 无 DecodeUrl 表（BPD/TPN 等站点可能使用其他机制）" % site.upper()}
+
+        conn = pymssql.connect(
+            server=DB_CONFIG["server"],
+            port=DB_CONFIG["port"],
+            user=DB_CONFIG["user"],
+            password=DB_CONFIG["password"],
+            database=DB_CONFIG["database"],
+            login_timeout=10,
+            autocommit=True,
+        )
+        cursor = conn.cursor()
+
+        # 查询匹配的 URL
+        query = (
+            "SELECT TOP 10 'https://%s.uat.autobestdevops.com'+url AS FullUrl, url, Type "
+            "FROM [%s] "
+            "WHERE Type='%s' AND url LIKE '%%%s%%' "
+            "ORDER BY url"
+        ) % (site.lower(), table, type, keyword.lower())
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        cols = [d[0] for d in cursor.description]
+
+        results = []
+        for row in rows:
+            results.append(dict(zip(cols, row)))
+
+        conn.close()
+
+        return {
+            "site": site.upper(),
+            "keyword": keyword,
+            "type": type,
+            "count": len(results),
+            "urls": results,
+        }
+    except Exception as e:
+        return {"error": "db_lookup_url 失败: %s" % str(e)}
+
+
 TOOL_HANDLERS = {
     "analyze_pr": _analyze_pr_handler,
     "run_test": _run_test_handler,
     "search_kb": _search_kb_handler,
     "build_kb": _build_kb_handler,
     "explore_site": _explore_site_handler,
+    "db_lookup_url": _db_lookup_url_handler,
 }
 
 
@@ -680,17 +792,17 @@ class Agent:
                 "content": (
                     "你是 AutoBest 前端需求测试专家。\n\n"
                     "## 核心工作流\n"
-                    "1. analyze_pr → 获取 PR 变更文件 + diff + 知识库需求上下文\n"
-                    "2. 根据变更文件名匹配页面 URL（见下方站点结构）\n"
-                    "3. explore_site → 可选：验证页面确实存在\n"
-                    "4. run_test → 执行测试\n\n"
+                    "1. analyze_pr → 获取 PR 变更文件 + diff + Dify 知识库需求上下文\n"
+                    "2. db_lookup_url → 从数据库查每个变更文件对应的精确 URL（不要猜！）\n"
+                    "   例如: db_lookup_url(site='HPN', keyword='privacy_policy', type='Service')\n"
+                    "3. run_test → 用查到的精确 URL 执行测试\n\n"
                     "## 规则\n"
-                    "- 不要猜测 URL！用下方站点结构表查\n"
+                    "- 永远不要猜测 URL！用 db_lookup_url 从数据库查\n"
                     "- 变更文件路径如 /Frontend_正厂整合需求/Policy/1.第一网站/Privacy Policy.md\n"
-                    "  文件名 = Privacy Policy → 查表得 /service/{brand}-privacy_policy.html\n"
+                    "  文件名 = Privacy Policy → keyword='privacy_policy'\n"
                     "- 测试失败时先确认 URL 正确，再判断内容问题\n"
-                    "- 结合 Dify KB 需求原文 + diff 变更做综合分析\n\n"
-                    + SITE_STRUCTURE_TEXT
+                    "- 结合 Dify KB 需求原文 + diff 变更做综合分析\n"
+                    "- 所有 23 个站点共享同一套代码，URL 结构相同仅品牌前缀不同\n"
                 ),
             }
         ]
