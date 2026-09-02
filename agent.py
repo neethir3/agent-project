@@ -489,9 +489,11 @@ def _summarize_diff(diff_text: str) -> str:
 
 
 def _generate_test_suggestions(changed_files: list) -> list:
-    """根据变更文件生成测试建议，自动匹配站点结构生成精确 URL。
+    """根据变更文件生成测试建议，使用 SITE_PAGES (site_pages.json) 查精确 URL。
 
-    使用 SITE_BRAND + PAGE_URL_TEMPLATES 查表，不再硬编码或猜测。
+    数据源自 AutoPart_DecodeUrl 表，自动适配各站点 URL 格式差异：
+    - 第一网站/新网站: 用下划线 + .html（如 /service/bmw-privacy_policy.html）
+    - 第二网站: 用横杠、无 .html（如 /service/toyota-privacy-policy）
     """
     tests = []
     tid = 0
@@ -523,8 +525,18 @@ def _generate_test_suggestions(changed_files: list) -> list:
 
         for site in sorted(all_sites):
             tid += 1
-            # 用页面结构查表生成精确 URL
-            test_url = _page_url(site, file_name)
+            # 从 SITE_PAGES (site_pages.json) 查精确 URL（自动适配各站点格式差异）
+            test_url = _site_test_url(site) + "/"  # 默认首页
+            file_name_lower = file_name.lower().replace(" ", "_").replace("-", "_")
+            if site in SITE_PAGES:
+                for ptype, urls in SITE_PAGES[site].items():
+                    for url in urls:
+                        url_lower = url.lower()
+                        if file_name_lower in url_lower or url_lower.rstrip("/").endswith("/" + file_name_lower):
+                            test_url = _site_test_url(site) + url
+                            break
+                    if test_url != _site_test_url(site) + "/":
+                        break
 
             tests.append({
                 "id": tid,
@@ -668,141 +680,61 @@ def _explore_site_handler(url: str) -> dict:
         return {"error": "explore_site 执行失败: %s" % str(e)}
 
 
-# 站点 Service 页面 URL 映射（从 AutoPart_DecodeUrl 表导出，精确无误）
-# 格式: {site: {page_keyword: url_path}}
-SITE_SERVICE_URLS = {
-    "adpg": {"about_us": "/service/audi-about_us", "privacy_policy": "/service/audi-privacy_policy",
-             "return_policy": "/service/audi-return_policy", "sales_policy": "/service/audi-sales_policy",
-             "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "apw": {"about_us": "/service/acura-about_us.html", "core_policy": "/service/acura-core_policy.html",
-            "privacy_policy": "/service/acura-privacy_policy.html", "return_policy": "/service/acura-return_policy.html",
-            "sales_policy": "/service/acura-sales_policy.html", "warranty": "/service/acura-warranty.html",
-            "contact_us": "/service/contact/us.html", "vin_decoder": "/vin-decoder.html"},
-    "bpd": {"about_us": "/service/bmw-about_us.html", "core_policy": "/service/bmw-core_policy.html",
-            "international_policy": "/service/bmw-international_policy.html",
-            "privacy_policy": "/service/bmw-privacy_policy.html", "return_policy": "/service/bmw-return_policy.html",
-            "sales_policy": "/service/bmw-sales_policy.html", "contact_us": "/service/contact/us.html",
-            "vin_decoder": "/vin-decoder.html"},
-    "cpd": {"about_us": "/service/gm-about-us", "privacy_policy": "/service/gm-privacy-policy",
-            "return_policy": "/service/gm-return-policy", "sales_policy": "/service/gm-sales-policy",
-            "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "cpg": {"about_us": "/service/gm-about_us", "core_policy": "/service/gm-core_policy",
-            "privacy_policy": "/service/gm-privacy_policy", "return_policy": "/service/gm-return_policy",
-            "sales_policy": "/service/gm-sales_policy", "warranty": "/service/gm-warranty",
-            "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "fpd": {"about_us": "/service/ford-about_us", "privacy_policy": "/service/ford-privacy-policy",
-            "return_policy": "/service/ford-return-policy", "sales_policy": "/service/ford-sales-policy",
-            "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "fpg": {"about_us": "/service/ford-about_us.html", "privacy_policy": "/service/ford-privacy_policy.html",
-            "return_policy": "/service/ford-return_policy.html", "sales_policy": "/service/ford-sales_policy.html",
-            "contact_us": "/service/contact/us.html", "vin_decoder": "/vin-decoder.html"},
-    "gpg": {"about_us": "/service/gm-about_us.html", "core_policy": "/service/gm-core_policy.html",
-            "privacy_policy": "/service/gm-privacy_policy.html", "return_policy": "/service/gm-return_policy.html",
-            "sales_policy": "/service/gm-sales_policy.html", "warranty": "/service/gm-warranty.html",
-            "contact_us": "/service/contact/us.html", "vin_decoder": "/vin-decoder.html"},
-    "hpd": {"about_us": "/service/hyundai-about_us.html", "privacy_policy": "/service/hyundai-privacy_policy.html",
-            "return_policy": "/service/hyundai-return_policy.html", "sales_policy": "/service/hyundai-sales_policy.html",
-            "contact_us": "/service/contact/us.html", "vin_decoder": "/vin-decoder.html"},
-    "hpn": {"about_us": "/service/honda-about_us.html", "core_policy": "/service/honda-core_policy.html",
-            "privacy_policy": "/service/honda-privacy_policy.html", "return_policy": "/service/honda-return_policy.html",
-            "sales_policy": "/service/honda-sales_policy.html", "warranty": "/service/honda-warranty.html",
-            "contact_us": "/service/contact/us.html", "vin_decoder": "/vin-decoder.html"},
-    "ipd": {"about_us": "/service/infiniti-about_us.html", "core_policy": "/service/infiniti-core_policy.html",
-            "international_policy": "/service/infiniti-international_policy.html",
-            "privacy_policy": "/service/infiniti-privacy_policy.html", "return_policy": "/service/infiniti-return_policy.html",
-            "sales_policy": "/service/infiniti-sales_policy.html", "contact_us": "/service/contact/us.html",
-            "vin_decoder": "/vin-decoder.html"},
-    "jpd": {"about_us": "/service/mopar-about_us", "privacy_policy": "/service/mopar-privacy-policy",
-            "return_policy": "/service/mopar-return-policy", "sales_policy": "/service/mopar-sales-policy",
-            "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "kpn": {"about_us": "/service/kia-about_us.html", "privacy_policy": "/service/kia-privacy_policy.html",
-            "return_policy": "/service/kia-return_policy.html", "sales_policy": "/service/kia-sales_policy.html",
-            "contact_us": "/service/contact/us.html", "vin_decoder": "/vin-decoder.html"},
-    "lpn": {"about_us": "/service/lexus-about_us.html", "core_policy": "/service/lexus-core_policy.html",
-            "international_policy": "/service/lexus-international_policy.html",
-            "privacy_policy": "/service/lexus-privacy_policy.html", "return_policy": "/service/lexus-return_policy.html",
-            "sales_policy": "/service/lexus-sales_policy.html", "contact_us": "/service/contact/us.html",
-            "vin_decoder": "/vin-decoder.html"},
-    "mbpg": {"about_us": "/service/mercedes_benz-about_us", "privacy_policy": "/service/mercedes_benz-privacy_policy",
-             "return_policy": "/service/mercedes_benz-return_policy", "sales_policy": "/service/mercedes_benz-sales_policy",
-             "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "mpg": {"about_us": "/service/mopar-about_us.html", "core_policy": "/service/mopar-core_policy.html",
-            "international_policy": "/service/mopar-international_policy.html",
-            "privacy_policy": "/service/mopar-privacy_policy.html", "return_policy": "/service/mopar-return_policy.html",
-            "sales_policy": "/service/mopar-sales_policy.html", "contact_us": "/service/contact/us.html",
-            "vin_decoder": "/vin-decoder.html"},
-    "mtpg": {"about_us": "/service/mitsubishi-about_us", "privacy_policy": "/service/mitsubishi-privacy_policy",
-             "return_policy": "/service/mitsubishi-return_policy", "sales_policy": "/service/mitsubishi-sales_policy",
-             "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "mzpn": {"about_us": "/service/mazda-about_us", "privacy_policy": "/service/mazda-privacy_policy",
-             "return_policy": "/service/mazda-return_policy", "sales_policy": "/service/mazda-sales_policy",
-             "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "npd": {"about_us": "/service/nissan-about_us.html", "core_policy": "/service/nissan-core_policy.html",
-            "privacy_policy": "/service/nissan-privacy_policy.html", "return_policy": "/service/nissan-return_policy.html",
-            "sales_policy": "/service/nissan-sales_policy.html", "warranty": "/service/nissan-warranty.html",
-            "contact_us": "/service/contact/us.html", "vin_decoder": "/vin-decoder.html"},
-    "spd": {"about_us": "/service/subaru-about_us.html", "core_policy": "/service/subaru-core_policy.html",
-            "privacy_policy": "/service/subaru-privacy_policy.html", "return_policy": "/service/subaru-return_policy.html",
-            "sales_policy": "/service/subaru-sales_policy.html", "warranty": "/service/subaru-warranty.html",
-            "contact_us": "/service/contact/us.html", "vin_decoder": "/vin-decoder.html"},
-    "tpd": {"about_us": "/service/toyota-about_us.html", "core_policy": "/service/toyota-core_policy.html",
-            "international_policy": "/service/toyota-international_policy.html",
-            "privacy_policy": "/service/toyota-privacy_policy.html", "return_policy": "/service/toyota-return_policy.html",
-            "sales_policy": "/service/toyota-sales_policy.html", "contact_us": "/service/contact/us.html",
-            "vin_decoder": "/vin-decoder.html"},
-    "tpn": {"about_us": "/service/toyota-about_us", "core_policy": "/service/toyota-core_policy",
-            "privacy_policy": "/service/toyota-privacy_policy", "return_policy": "/service/toyota-return_policy",
-            "sales_policy": "/service/toyota-sales_policy", "warranty": "/service/toyota-warranty",
-            "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "vpg": {"about_us": "/service/volvo-about_us", "privacy_policy": "/service/volvo-privacy_policy",
-            "return_policy": "/service/volvo-return_policy", "sales_policy": "/service/volvo-sales_policy",
-            "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-    "vwpg": {"about_us": "/service/volkswagen-about_us", "privacy_policy": "/service/volkswagen-privacy_policy",
-             "return_policy": "/service/volkswagen-return_policy", "sales_policy": "/service/volkswagen-sales_policy",
-             "contact_us": "/service/contact/us", "vin_decoder": "/vin-decoder"},
-}
+# 加载站点页面映射（从 AutoPart_DecodeUrl 表导出）
+def _load_site_pages():
+    """加载 site_pages.json，返回 {site: {type: [urls]}}。"""
+    import json as _json
+    _path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site_pages.json")
+    try:
+        with open(_path, "r", encoding="utf-8") as _f:
+            return _json.load(_f)
+    except Exception:
+        return {}
+
+SITE_PAGES = _load_site_pages()
 
 
-def _db_lookup_url_handler(site: str, keyword: str, type: str = "Service") -> dict:
-    """工具: 从本地映射表查站点页面的精确 URL（数据源自 AutoPart_DecodeUrl 表）。"""
+def _db_lookup_url_handler(site: str, keyword: str, type: str = "") -> dict:
+    """工具: 查站点页面的精确 URL（数据源自 AutoPart_DecodeUrl 表）。
+    用法: db_lookup_url(site='HPN', keyword='privacy_policy')
+          db_lookup_url(site='BPD', keyword='accord', type='Model')
+    """
     site_lower = site.lower()
     keyword_lower = keyword.lower().replace(" ", "_").replace("-", "_")
 
-    if site_lower not in SITE_SERVICE_URLS:
-        return {"error": "站点 %s 不在映射表中，可用站点: %s" % (site.upper(), ", ".join(sorted(SITE_SERVICE_URLS.keys())))}
+    if site_lower not in SITE_PAGES:
+        return {"error": "站点 %s 不在映射表中，可用站点: %s" % (site.upper(), ", ".join(sorted(SITE_PAGES.keys())))}
 
-    pages = SITE_SERVICE_URLS[site_lower]
     base = _site_test_url(site_lower)
+    all_matches = []
 
-    # 精确匹配
-    if keyword_lower in pages:
+    # 搜索所有类型
+    for ptype, urls in SITE_PAGES[site_lower].items():
+        if type and ptype != type:
+            continue
+        for url in urls:
+            url_lower = url.lower()
+            if keyword_lower in url_lower:
+                all_matches.append({
+                    "type": ptype,
+                    "url": base + url,
+                })
+
+    if all_matches:
         return {
             "site": site.upper(),
             "keyword": keyword,
-            "url": base + pages[keyword_lower],
-            "found": True,
+            "count": len(all_matches),
+            "matches": all_matches[:10],  # 最多返回 10 条
         }
 
-    # 模糊匹配
-    matches = []
-    for k, v in pages.items():
-        if keyword_lower in k or k in keyword_lower:
-            matches.append({"page": k, "url": base + v})
-
-    if matches:
-        return {
-            "site": site.upper(),
-            "keyword": keyword,
-            "matches": matches,
-            "found": True,
-        }
-
+    # 无匹配，返回可用类型列表
     return {
         "site": site.upper(),
         "keyword": keyword,
-        "available_pages": list(pages.keys()),
         "found": False,
-        "hint": "请从 available_pages 中选择匹配的页面",
+        "available_types": list(SITE_PAGES[site_lower].keys()),
+        "hint": "请从 available_types 中选择类型，或调整 keyword",
     }
 
 
