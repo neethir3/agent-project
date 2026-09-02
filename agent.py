@@ -502,7 +502,7 @@ def _generate_test_suggestions(changed_files: list) -> list:
     all_sites = set()
     for f in changed_files:
         path = f["path"]
-        sites = re_mod.findall(r'\b(%s)\b' % "|".join(SITE_DOMAINS.keys()), path, re.IGNORECASE)
+        sites = re_mod.findall(r'\b(%s)\b' % "|".join(SITE_DOMAINS.keys()), path, re_mod.IGNORECASE)
         all_sites.update(s.lower() for s in sites)
     if not all_sites:
         all_sites = {"bpd"}
