@@ -135,13 +135,20 @@ class TestRunner:
 
             elif check_type == "content":
                 body_text = page.inner_text("body")
-                result["actual"] = body_text[:500]
+                result["actual"] = body_text[:5000]  # 返回前 5000 字符，足够 LLM 比对
                 if expected and expected in body_text:
                     result["status"] = "pass"
                     result["detail"] = "页面包含预期内容: %s" % expected
                 else:
                     result["status"] = "fail"
                     result["detail"] = "页面不包含预期内容: %s" % expected
+
+            elif check_type == "full_text":
+                # 返回完整页面文本，不截断，用于逐字比对
+                body_text = page.inner_text("body")
+                result["actual"] = body_text
+                result["status"] = "pass"
+                result["detail"] = "完整页面文本已获取 (%d 字符)" % len(body_text)
 
             elif check_type == "element":
                 if not selector:
@@ -150,7 +157,7 @@ class TestRunner:
                 try:
                     el = page.wait_for_selector(selector, timeout=self.timeout)
                     el_text = el.inner_text() if el else ""
-                    result["actual"] = el_text[:500]
+                    result["actual"] = el_text[:2000]
                     if expected:
                         if expected in el_text:
                             result["status"] = "pass"

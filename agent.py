@@ -245,7 +245,7 @@ TOOLS = [
                                 "id": {"type": "integer"},
                                 "description": {"type": "string"},
                                 "test_url": {"type": "string"},
-                                "check_type": {"type": "string", "enum": ["content", "element", "url", "screenshot"]},
+                                "check_type": {"type": "string", "enum": ["content", "element", "url", "screenshot", "full_text"]},
                                 "expected": {"type": "string"},
                             },
                         },
@@ -551,15 +551,15 @@ def _generate_test_suggestions(changed_files: list) -> list:
                 "sites": [site],
             })
 
-            # 2. 回归测试：截图 + 验证页面核心结构未被破坏
+            # 2. 回归测试：获取完整页面文本 + 截图，用于比对未改动部分
             tid += 1
             tests.append({
                 "id": tid,
-                "description": "[回归] 验证 %s 页面结构完整 [%s]" % (file_name, site.upper()),
+                "description": "[回归] 获取 %s 页面全文 [%s]" % (file_name, site.upper()),
                 "test_url": test_url,
                 "file_name": file_name,
                 "keywords": [],
-                "check_type": "screenshot",
+                "check_type": "full_text",
                 "expected": "",
                 "sites": [site],
             })
@@ -818,10 +818,11 @@ class Agent:
                     "- 结合 Dify KB 需求原文 + diff 变更做综合分析\n"
                     "- 排除第二网站（CPD, FPD, JPD, TPN），不为其生成测试\n"
                     "- 【重要】测试策略：不只测变更内容，也要回归测试\n"
-                    "  1. 正向测试：验证 diff 中新增/修改的文字是否出现在页面上\n"
-                    "  2. 回归测试：验证页面原有未改动的核心内容是否仍然存在\n"
-                    "     （如页面标题、核心条款、关键链接等未被本次 PR 修改的部分）\n"
+                    "  1. 正向测试：用 check_type='content' 验证 diff 中新增/修改的文字是否出现在页面上\n"
+                    "  2. 回归测试：用 check_type='full_text' 获取页面完整文本，\n"
+                    "     与 PR diff 中未改动的核心内容逐段比对，确认未被意外破坏\n"
                     "  3. 截图测试：每个页面至少截一张全页截图，保留视觉证据\n"
+                    "  4. full_text 返回页面全文（不截断），可用于逐字比对"
                 ),
             }
         ]
