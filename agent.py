@@ -509,8 +509,6 @@ def _generate_test_suggestions(changed_files: list) -> list:
         all_sites.update(s.lower() for s in sites)
     if not all_sites:
         all_sites = {"bpd"}
-    # 排除第二网站
-    all_sites = all_sites - EXCLUDED_SITES
 
     for f in changed_files:
         path = f["path"]
@@ -527,7 +525,6 @@ def _generate_test_suggestions(changed_files: list) -> list:
                     keywords.append(word[:80])
 
         for site in sorted(all_sites):
-            tid += 1
             # 从 SITE_PAGES (site_pages.json) 查精确 URL（自动适配各站点格式差异）
             test_url = _site_test_url(site) + "/"  # 默认首页
             file_name_lower = file_name.lower().replace(" ", "_").replace("-", "_")
@@ -541,14 +538,29 @@ def _generate_test_suggestions(changed_files: list) -> list:
                     if test_url != _site_test_url(site) + "/":
                         break
 
+            # 1. 正向测试：验证变更内容
+            tid += 1
             tests.append({
                 "id": tid,
-                "description": "验证 %s 页面更新 [%s]" % (file_name, site.upper()),
+                "description": "[正向] 验证 %s 页面变更内容 [%s]" % (file_name, site.upper()),
                 "test_url": test_url,
                 "file_name": file_name,
                 "keywords": keywords,
                 "check_type": "content" if keywords else "screenshot",
                 "expected": keywords[0] if keywords else "",
+                "sites": [site],
+            })
+
+            # 2. 回归测试：截图 + 验证页面核心结构未被破坏
+            tid += 1
+            tests.append({
+                "id": tid,
+                "description": "[回归] 验证 %s 页面结构完整 [%s]" % (file_name, site.upper()),
+                "test_url": test_url,
+                "file_name": file_name,
+                "keywords": [],
+                "check_type": "screenshot",
+                "expected": "",
                 "sites": [site],
             })
 
@@ -796,6 +808,11 @@ class Agent:
                     "- 测试失败时先确认 URL 正确，再判断内容问题\n"
                     "- 结合 Dify KB 需求原文 + diff 变更做综合分析\n"
                     "- 排除第二网站（CPD, FPD, JPD, TPN），不为其生成测试\n"
+                    "- 【重要】测试策略：不只测变更内容，也要回归测试\n"
+                    "  1. 正向测试：验证 diff 中新增/修改的文字是否出现在页面上\n"
+                    "  2. 回归测试：验证页面原有未改动的核心内容是否仍然存在\n"
+                    "     （如页面标题、核心条款、关键链接等未被本次 PR 修改的部分）\n"
+                    "  3. 截图测试：每个页面至少截一张全页截图，保留视觉证据\n"
                 ),
             }
         ]
