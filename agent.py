@@ -597,9 +597,18 @@ def _run_test_handler(test_cases: list) -> dict:
         finally:
             runner.stop()
 
-        # 不传截图 base64 给 LLM（太大），只返回状态摘要
+        # 截图存文件，返回文件路径（不传 base64 给 LLM，太大）
+        import time as _time
+        ss_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshots")
+        os.makedirs(ss_dir, exist_ok=True)
         for r in results:
-            r.pop("screenshot", None)
+            b64 = r.pop("screenshot", None)
+            if b64:
+                fname = "test_%s_%s_%s.png" % (r["id"], r["status"], _time.strftime("%H%M%S"))
+                fpath = os.path.join(ss_dir, fname)
+                with open(fpath, "wb") as _f:
+                    _f.write(base64.b64decode(b64))
+                r["screenshot_url"] = "/screenshots/%s" % fname
 
         passed = sum(1 for r in results if r["status"] == "pass")
         failed = sum(1 for r in results if r["status"] == "fail")

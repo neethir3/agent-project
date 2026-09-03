@@ -33,12 +33,15 @@ try:
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
+    from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel, Field
 except ImportError:
     print("请先安装 fastapi: pip install fastapi uvicorn pydantic")
     raise
 
 # ─── 配置 ──────────────────────────────────────────────────────────────────────
+
+_SCREENSHOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshots")
 
 PORT = int(os.environ.get("PORT", "8800"))
 HOST = os.environ.get("HOST", "127.0.0.1")
@@ -58,6 +61,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 截图静态文件（测试截图存这里，通过 HTTP 查看）
+os.makedirs(_SCREENSHOT_DIR, exist_ok=True)
+app.mount("/screenshots", StaticFiles(directory=_SCREENSHOT_DIR), name="screenshots")
 
 
 # ─── 请求/响应模型 ─────────────────────────────────────────────────────────────
