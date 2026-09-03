@@ -34,6 +34,7 @@ try:
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
     from fastapi.staticfiles import StaticFiles
+    from typing import Optional
     from pydantic import BaseModel, Field
 except ImportError:
     print("请先安装 fastapi: pip install fastapi uvicorn pydantic")
@@ -100,7 +101,7 @@ class RunTestRequest(BaseModel):
 class TestResult(BaseModel):
     id: int
     status: str
-    screenshot: str | None = None
+    screenshot: Optional[str] = None
     actual: str = ""
     detail: str = ""
     error: str = ""
