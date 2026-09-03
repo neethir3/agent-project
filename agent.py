@@ -413,11 +413,14 @@ def _analyze_pr_handler(pr_url: str) -> dict:
                 continue
 
             diff_text = generate_diff(old_content, new_content, file_path)
+            diff_lines = diff_text.count("\n")
             changed_files.append({
                 "path": file_path,
                 "change_type": ct,
                 "diff_summary": _summarize_diff(diff_text),
-                "diff_lines": diff_text.count("\n"),
+                "diff_text": diff_text[:3000],  # 完整 diff 前 3000 字符，用于比对
+                "diff_truncated": diff_lines > 150,
+                "diff_lines": diff_lines,
             })
 
         # 生成建议的测试用例
@@ -470,7 +473,7 @@ def _analyze_pr_handler(pr_url: str) -> dict:
 
 
 def _summarize_diff(diff_text: str) -> str:
-    """从 diff 文本中提取简要摘要。"""
+    """从 diff 文本中提取变更摘要，保留足够上下文用于比对。"""
     added = []
     removed = []
     for line in diff_text.split("\n"):
@@ -481,12 +484,12 @@ def _summarize_diff(diff_text: str) -> str:
 
     summary_parts = []
     if added:
-        summary_parts.append("新增: %s" % "; ".join(added[:3]))
+        summary_parts.append("新增: %s" % " | ".join(added[:30]))
     if removed:
-        summary_parts.append("删除: %s" % "; ".join(removed[:3]))
+        summary_parts.append("删除: %s" % " | ".join(removed[:30]))
     if not summary_parts:
         summary_parts.append("仅格式变化")
-    return " | ".join(summary_parts)
+    return "\n".join(summary_parts)
 
 
 def _generate_test_suggestions(changed_files: list) -> list:
@@ -820,9 +823,11 @@ class Agent:
                     "- 【重要】测试策略：不只测变更内容，也要回归测试\n"
                     "  1. 正向测试：用 check_type='content' 验证 diff 中新增/修改的文字是否出现在页面上\n"
                     "  2. 回归测试：用 check_type='full_text' 获取页面完整文本，\n"
-                    "     与 PR diff 中未改动的核心内容逐段比对，确认未被意外破坏\n"
+                    "     与 diff_text 中未改动的核心内容逐段比对，确认未被意外破坏\n"
                     "  3. 截图测试：每个页面至少截一张全页截图，保留视觉证据\n"
-                    "  4. full_text 返回页面全文（不截断），可用于逐字比对"
+                    "  4. full_text 返回页面全文（不截断），可用于逐字比对\n"
+                    "  5. diff_text 包含完整变更内容，对比时参照 diff 中的新增(+)和删除(-)行，\n"
+                    "     确认：新增行在页面上 → 删除行不在页面上 → 其他内容保持完整"
                 ),
             }
         ]
